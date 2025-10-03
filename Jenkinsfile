@@ -24,7 +24,7 @@ pipeline {
             steps {
                 script {
                     echo "Transferring files to EC2..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'mohamedtarek112', keyFileVariable: 'SSH_KEY')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         bat """
                             echo "Testing SSH connection..."
                             ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=accept-new %EC2_USER%@%EC2_HOST% "echo 'SSH connection successful'"
@@ -100,7 +100,7 @@ pipeline {
     post {
         always {
             echo 'Cleaning up Docker images on EC2...'
-            withCredentials([sshUserPrivateKey(credentialsId: 'mohamedtarek112', keyFileVariable: 'SSH_KEY')]) {
+            withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                 bat """
                     ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=accept-new %EC2_USER%@%EC2_HOST% "
                         docker logout || true

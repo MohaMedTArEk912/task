@@ -24,9 +24,9 @@ pipeline {
             steps {
                 script {
                     echo "Building Docker image: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-                    sh """
-                        docker build -t ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG} .
-                        docker tag ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG} ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest
+                    bat """
+                        docker build -t %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% .
+                        docker tag %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest
                     """
                 }
             }
@@ -36,9 +36,9 @@ pipeline {
             steps {
                 script {
                     echo 'Logging into Docker Hub...'
-                    sh """
-                        echo \$DOCKERHUB_CREDENTIALS_PSW | docker login -u \$DOCKERHUB_CREDENTIALS_USR --password-stdin
-                    """
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
+                        bat "echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin"
+                    }
                 }
             }
         }
@@ -47,9 +47,9 @@ pipeline {
             steps {
                 script {
                     echo "Pushing image to Docker Hub..."
-                    sh """
-                        docker push ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}
-                        docker push ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest
+                    bat """
+                        docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG%
+                        docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest
                     """
                 }
             }
@@ -59,25 +59,18 @@ pipeline {
             steps {
                 script {
                     echo "Deploying to EC2 instance: ${EC2_HOST}"
-                    sh """
-                        ssh -o StrictHostKeyChecking=no -i \$EC2_KEY ${EC2_USER}@${EC2_HOST} << 'EOF'
-                            # Login to Docker Hub on EC2
-                            echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
-                            
-                            # Pull the latest image
-                            docker pull ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}
-                            
-                            # Stop and remove old container if exists
-                            docker stop ${CONTAINER_NAME} || true
-                            docker rm ${CONTAINER_NAME} || true
-                            
-                            # Run new container
-                            docker run -d --name ${CONTAINER_NAME} -p 80:80 ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}
-                            
-                            # Verify container is running
-                            docker ps | grep ${CONTAINER_NAME}
-EOF
-                    """
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'KEY_FILE')]) {
+                        bat """
+                            ssh -o StrictHostKeyChecking=no -i %KEY_FILE% %EC2_USER%@%EC2_HOST% "
+                            docker login -u %DOCKERHUB_USERNAME% -p %DOCKERHUB_CREDENTIALS_PSW% &&
+                            docker pull %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% &&
+                            docker stop %CONTAINER_NAME% || true &&
+                            docker rm %CONTAINER_NAME% || true &&
+                            docker run -d --name %CONTAINER_NAME% -p 80:80 %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% &&
+                            docker ps | findstr %CONTAINER_NAME%
+                            "
+                        """
+                    }
                 }
             }
         }
@@ -86,10 +79,10 @@ EOF
     post {
         always {
             echo 'Cleaning up local Docker images...'
-            sh """
+            bat """
                 docker logout
-                docker rmi ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG} || true
-                docker rmi ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest || true
+                docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% || true
+                docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest || true
             """
         }
         success {

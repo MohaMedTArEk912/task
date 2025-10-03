@@ -24,13 +24,13 @@ pipeline {
             steps {
                 script {
                     echo "Transferring files to EC2..."
-                    sshagent(credentials: ['ec2-ssh-key']) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         bat """
                             echo "Testing SSH connection..."
-                            ssh -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "echo 'SSH connection successful'"
+                            "C:\\Program Files\\Git\\usr\\bin\\ssh.exe" -i "%SSH_KEY%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "echo 'SSH connection successful'"
                             
                             echo "Copying files..."
-                            scp -o StrictHostKeyChecking=no Dockerfile index.html %EC2_USER%@%EC2_HOST%:/home/%EC2_USER%/
+                            "C:\\Program Files\\Git\\usr\\bin\\scp.exe" -i "%SSH_KEY%" -o StrictHostKeyChecking=no Dockerfile index.html %EC2_USER%@%EC2_HOST%:/home/%EC2_USER%/
                         """
                     }
                 }

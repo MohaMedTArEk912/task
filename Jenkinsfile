@@ -85,12 +85,7 @@ pipeline {
                     echo "Deploying container on EC2: ${EC2_HOST}"
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         bat """
-                            "C:\\Program Files\\Git\\usr\\bin\\ssh.exe" -i "%SSH_KEY%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "
-                                docker stop %CONTAINER_NAME% || true &&
-                                docker rm %CONTAINER_NAME% || true &&
-                                docker run -d --name %CONTAINER_NAME% -p 80:80 %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% &&
-                                docker ps | grep %CONTAINER_NAME%
-                            "
+                            "C:\\Program Files\\Git\\usr\\bin\\ssh.exe" -i "%SSH_KEY%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "docker stop %CONTAINER_NAME% || true && docker rm %CONTAINER_NAME% || true && docker run -d --name %CONTAINER_NAME% -p 80:80 %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% && docker ps | grep %CONTAINER_NAME%"
                         """
                     }
                 }

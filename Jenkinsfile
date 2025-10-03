@@ -24,17 +24,13 @@ pipeline {
             steps {
                 script {
                     echo "Transferring files to EC2..."
-                    sshagent(['ec2-ssh-key']) {
-                        // Ensure the SSH directory exists
-                        bat 'if not exist "%USERPROFILE%\\.ssh" mkdir "%USERPROFILE%\\.ssh"'
-                        
-                        // Add host key scanning
+                    withCredentials([sshUserPrivateKey(credentialsId: 'mohamedtarek112', keyFileVariable: 'SSH_KEY')]) {
                         bat """
                             echo "Testing SSH connection..."
-                            ssh -o StrictHostKeyChecking=accept-new %EC2_USER%@%EC2_HOST% "echo 'SSH connection successful'"
+                            ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=accept-new %EC2_USER%@%EC2_HOST% "echo 'SSH connection successful'"
                             
                             echo "Copying files..."
-                            scp Dockerfile index.html %EC2_USER%@%EC2_HOST%:/home/%EC2_USER%/
+                            scp -i "%SSH_KEY%" -o StrictHostKeyChecking=accept-new Dockerfile index.html %EC2_USER%@%EC2_HOST%:/home/%EC2_USER%/
                         """
                     }
                 }
@@ -104,9 +100,9 @@ pipeline {
     post {
         always {
             echo 'Cleaning up Docker images on EC2...'
-            sshagent(['ec2-ssh-key']) {
+            withCredentials([sshUserPrivateKey(credentialsId: 'mohamedtarek112', keyFileVariable: 'SSH_KEY')]) {
                 bat """
-                    ssh -o StrictHostKeyChecking=accept-new %EC2_USER%@%EC2_HOST% "
+                    ssh -i "%SSH_KEY%" -o StrictHostKeyChecking=accept-new %EC2_USER%@%EC2_HOST% "
                         docker logout || true
                         docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% || true
                         docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest || true

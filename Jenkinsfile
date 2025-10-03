@@ -7,7 +7,7 @@ pipeline {
         IMAGE_NAME = 'nginx-custom-app'
         IMAGE_TAG = "${BUILD_NUMBER}"
         EC2_HOST = '56.228.11.117'
-        EC2_USER = 'mohamedtarek112'
+        EC2_USER = 'ubuntu'
         EC2_KEY = credentials('ec2-ssh-key')
         CONTAINER_NAME = 'nginx-app'
     }

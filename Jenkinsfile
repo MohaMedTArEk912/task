@@ -41,9 +41,9 @@ pipeline {
             steps {
                 script {
                     echo "Building Docker image on EC2: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-                    sshagent(credentials: ['ec2-ssh-key']) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         bat """
-                            ssh -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "cd /home/%EC2_USER% && docker build -t %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% . && docker tag %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest"
+                            "C:\\Program Files\\Git\\usr\\bin\\ssh.exe" -i "%SSH_KEY%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "cd /home/%EC2_USER% && docker build -t %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% . && docker tag %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest"
                         """
                     }
                 }
@@ -54,12 +54,13 @@ pipeline {
             steps {
                 script {
                     echo 'Logging into Docker Hub on EC2...'
-                    sshagent(credentials: ['ec2-ssh-key']) {
-                        withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
-                            bat """
-                                ssh -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin"
-                            """
-                        }
+                    withCredentials([
+                        sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY'),
+                        usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')
+                    ]) {
+                        bat """
+                            "C:\\Program Files\\Git\\usr\\bin\\ssh.exe" -i "%SSH_KEY%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin"
+                        """
                     }
                 }
             }
@@ -69,9 +70,9 @@ pipeline {
             steps {
                 script {
                     echo "Pushing image to Docker Hub from EC2..."
-                    sshagent(credentials: ['ec2-ssh-key']) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         bat """
-                            ssh -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% && docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest"
+                            "C:\\Program Files\\Git\\usr\\bin\\ssh.exe" -i "%SSH_KEY%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% && docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest"
                         """
                     }
                 }
@@ -82,9 +83,9 @@ pipeline {
             steps {
                 script {
                     echo "Deploying container on EC2: ${EC2_HOST}"
-                    sshagent(credentials: ['ec2-ssh-key']) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                         bat """
-                            ssh -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "
+                            "C:\\Program Files\\Git\\usr\\bin\\ssh.exe" -i "%SSH_KEY%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "
                                 docker stop %CONTAINER_NAME% || true &&
                                 docker rm %CONTAINER_NAME% || true &&
                                 docker run -d --name %CONTAINER_NAME% -p 80:80 %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% &&
@@ -100,9 +101,9 @@ pipeline {
     post {
         always {
             echo 'Cleaning up Docker images on EC2...'
-            sshagent(credentials: ['ec2-ssh-key']) {
+            withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY')]) {
                 bat """
-                    ssh -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "docker logout || true && docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% || true && docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest || true"
+                    "C:\\Program Files\\Git\\usr\\bin\\ssh.exe" -i "%SSH_KEY%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "docker logout || true && docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% || true && docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest || true"
                 """
             }
         }

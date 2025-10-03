@@ -20,14 +20,28 @@ pipeline {
             }
         }
         
+        stage('Transfer Files to EC2') {
+            steps {
+                script {
+                    echo "Transferring files to EC2..."
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'KEY_FILE')]) {
+                        bat """
+                            scp -i "%KEY_FILE%" -o StrictHostKeyChecking=no Dockerfile index.html %EC2_USER%@%EC2_HOST%:/home/%EC2_USER%/
+                        """
+                    }
+                }
+            }
+        }
+        
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Building Docker image: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-                    bat """
-                        docker build -t %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% .
-                        docker tag %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest
-                    """
+                    echo "Building Docker image on EC2: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'KEY_FILE')]) {
+                        bat """
+                            ssh -i "%KEY_FILE%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "cd /home/%EC2_USER% && docker build -t %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% . && docker tag %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest"
+                        """
+                    }
                 }
             }
         }
@@ -35,9 +49,11 @@ pipeline {
         stage('Login to Docker Hub') {
             steps {
                 script {
-                    echo 'Logging into Docker Hub...'
+                    echo 'Logging into Docker Hub on EC2...'
                     withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
-                        bat "echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin"
+                        bat """
+                            ssh -i "%KEY_FILE%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "echo %DOCKERHUB_PASS% | docker login -u %DOCKERHUB_USER% --password-stdin"
+                        """
                     }
                 }
             }
@@ -46,28 +62,27 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    echo "Pushing image to Docker Hub..."
-                    bat """
-                        docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG%
-                        docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest
-                    """
+                    echo "Pushing image to Docker Hub from EC2..."
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'KEY_FILE')]) {
+                        bat """
+                            ssh -i "%KEY_FILE%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% && docker push %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest"
+                        """
+                    }
                 }
             }
         }
         
-        stage('Deploy to EC2') {
+        stage('Deploy Container') {
             steps {
                 script {
-                    echo "Deploying to EC2 instance: ${EC2_HOST}"
+                    echo "Deploying container on EC2: ${EC2_HOST}"
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'KEY_FILE')]) {
                         bat """
-                            ssh -o StrictHostKeyChecking=no -i %KEY_FILE% %EC2_USER%@%EC2_HOST% "
-                            docker login -u %DOCKERHUB_USERNAME% -p %DOCKERHUB_CREDENTIALS_PSW% &&
-                            docker pull %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% &&
-                            docker stop %CONTAINER_NAME% || true &&
-                            docker rm %CONTAINER_NAME% || true &&
-                            docker run -d --name %CONTAINER_NAME% -p 80:80 %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% &&
-                            docker ps | findstr %CONTAINER_NAME%
+                            ssh -i "%KEY_FILE%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "
+                                docker stop %CONTAINER_NAME% || true &&
+                                docker rm %CONTAINER_NAME% || true &&
+                                docker run -d --name %CONTAINER_NAME% -p 80:80 %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% &&
+                                docker ps | grep %CONTAINER_NAME%
                             "
                         """
                     }
@@ -78,12 +93,16 @@ pipeline {
     
     post {
         always {
-            echo 'Cleaning up local Docker images...'
-            bat """
-                docker logout
-                docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% || true
-                docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest || true
-            """
+            echo 'Cleaning up Docker images on EC2...'
+            withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'KEY_FILE')]) {
+                bat """
+                    ssh -i "%KEY_FILE%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "
+                        docker logout || true
+                        docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:%IMAGE_TAG% || true
+                        docker rmi %DOCKERHUB_USERNAME%/%IMAGE_NAME%:latest || true
+                    "
+                """
+            }
         }
         success {
             echo 'Pipeline completed successfully!'

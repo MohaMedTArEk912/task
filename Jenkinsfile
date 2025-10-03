@@ -24,8 +24,12 @@ pipeline {
             steps {
                 script {
                     echo "Transferring files to EC2..."
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'KEY_FILE')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'KEY_FILE', usernameVariable: 'SSH_USER')]) {
                         bat """
+                            echo "Testing SSH connection..."
+                            ssh -i "%KEY_FILE%" -o StrictHostKeyChecking=no %EC2_USER%@%EC2_HOST% "echo 'SSH connection successful'"
+                            
+                            echo "Copying files..."
                             scp -i "%KEY_FILE%" -o StrictHostKeyChecking=no Dockerfile index.html %EC2_USER%@%EC2_HOST%:/home/%EC2_USER%/
                         """
                     }
